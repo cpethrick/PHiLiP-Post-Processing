@@ -46,6 +46,8 @@ def plot_periodic_turbulence(
     legend_on_input,
     legend_inside_input,
     nlegendcols_input,
+    has_numerical_entropy=[],
+    has_relaxation_parameter=[],
     transparent_legend_input=True,
     plot_kinetic_energy=True,
     plot_dissipation_rate=True,
@@ -66,6 +68,8 @@ def plot_periodic_turbulence(
     which_lines_dashed_input=[]
     # data store
     time_store = []
+    numerical_entropy_scaled_cumulative_store = []
+    relaxation_parameter_store = []
     kinetic_energy_store = []
     dissipation_store = []
     enstrophy_store = []
@@ -163,9 +167,29 @@ def plot_periodic_turbulence(
         labels_store.append(labels[i])
         # load file
         filename = data_directory_base+"/"+subdirectories[i]+"/"+filenames[i]
-        time, kinetic_energy, enstrophy, vorticity_based_dissipation, pressure_dilatation_based_dissipation, strain_rate_based_dissipation, deviatoric_strain_rate_based_dissipation = np.loadtxt(filename,skiprows=1,dtype=np.float64,unpack=True)
+        # note: add some parameter for when there's these two extra data columns
+        if labels[i] == "FD-24DOF-SIP":
+            print("Reading hardcode FD24SIP")
+            #FD-24-SIP has an extra column; hard-code reading that
+            time, numerical_entropy_scaled_cumulative, garbage1, relaxation_parameter, kinetic_energy, enstrophy, vorticity_based_dissipation, pressure_dilatation_based_dissipation, strain_rate_based_dissipation, deviatoric_strain_rate_based_dissipation = np.loadtxt(filename,skiprows=1,dtype=np.float64,unpack=True)
+        elif(has_numerical_entropy[i]):
+            if(has_relaxation_parameter[i]):
+                print("Reading rel param and num entropy")
+                time, numerical_entropy_scaled_cumulative, relaxation_parameter, kinetic_energy, enstrophy, vorticity_based_dissipation, pressure_dilatation_based_dissipation, strain_rate_based_dissipation, deviatoric_strain_rate_based_dissipation = np.loadtxt(filename,skiprows=1,dtype=np.float64,unpack=True)
+                numerical_entropy_scaled_cumulative*=-1
+            else:
+                print("Reading num entropy")
+                time, numerical_entropy_scaled_cumulative, kinetic_energy, enstrophy, vorticity_based_dissipation, pressure_dilatation_based_dissipation, strain_rate_based_dissipation, deviatoric_strain_rate_based_dissipation = np.loadtxt(filename,skiprows=1,dtype=np.float64,unpack=True)
+                numerical_entropy_scaled_cumulative*=-1
+        else:
+            print("Reading standard")
+            time, kinetic_energy, enstrophy, vorticity_based_dissipation, pressure_dilatation_based_dissipation, strain_rate_based_dissipation, deviatoric_strain_rate_based_dissipation = np.loadtxt(filename,skiprows=1,dtype=np.float64,unpack=True)
         # store data
         time_store.append(time)
+        if (has_numerical_entropy[i]):
+            numerical_entropy_scaled_cumulative_store.append(numerical_entropy_scaled_cumulative)
+        if(has_relaxation_parameter[i]):
+            relaxation_parameter_store.append(relaxation_parameter)
         kinetic_energy_store.append(kinetic_energy)
         # -- compute dissipation
         if(dissipation_rate_smoothing!=[]):
@@ -531,3 +555,115 @@ def plot_periodic_turbulence(
                 fig_directory=figure_directory_base,
                 clr_input=clr_input_store,mrkr_input=mrkr_input_store,lnstl_input=lnstl_input_store,
                 legend_fontSize=legend_fontSize_input)
+
+    # Remove the reference result for the lists
+    if(plot_PHiLiP_DNS_result_as_reference):
+        # No reference result for the following plots so remove all the DNS data
+        # and reset the which_lines_black_input and which_lines_dashed_input
+        time_store.pop(0)
+        labels_store.pop(0)
+        which_lines_dashed_input = []
+        which_lines_black_input = []
+        i_curve = 0 # reset the which_lines_black_input and which_lines_dashed_input
+        for i in range(0,number_of_result_curves):
+            if(black_line_flag[i]):
+                which_lines_black_input.append(i_curve)
+            if(dashed_line_flag[i]):
+                which_lines_dashed_input.append(i_curve)
+            i_curve += 1
+        if(clr_input!=[]):
+            clr_input_store.pop(0)
+        if(mrkr_input!=[]):
+            mrkr_input_store.pop(0)
+        if(lnstl_input!=[]):
+            lnstl_input_store.pop(0)
+
+    clr_input_store_ = []
+    mrkr_input_store_ = []
+    lnstl_input_store_ = []
+    which_lines_black_input_ = []
+    which_lines_dashed_input_ = []
+    time_store_ = []
+    labels_store_ = []
+    for i in range(0,number_of_result_curves):
+        if(has_numerical_entropy[i]==True and has_relaxation_parameter[i]==True):
+            # improve the logic for the case where there's no relaxation parameter
+            time_store_.append(time_store[i])
+            labels_store_.append(labels_store[i])
+            if(black_line_flag[i]):
+                which_lines_black_input_.append(which_lines_black_input[i])
+            if(dashed_line_flag[i]):
+                which_lines_dashed_input_.append(which_lines_dashed_input[i])
+            # i_curve = 0 # reset the which_lines_black_input and which_lines_dashed_input
+            # for i in range(0,number_of_result_curves):
+            #     if(black_line_flag[i]):
+            #         which_lines_black_input.append(i_curve)
+            #     if(dashed_line_flag[i]):
+            #         which_lines_dashed_input.append(i_curve)
+            #     i_curve += 1
+            if(clr_input!=[]):
+                clr_input_store_.append(clr_input_store[i])
+            if(mrkr_input!=[]):
+                mrkr_input_store_.append(mrkr_input_store[i])
+            if(lnstl_input!=[]):
+                lnstl_input_store_.append(lnstl_input_store[i])
+
+    #-----------------------------------------------------
+    # rrk stuff
+    #-----------------------------------------------------
+
+    # if has_numerical_entropy: #update this, like if(plot_num_entropy_flag)
+    qp.plotfxn(xdata=time_store_,
+                ydata=numerical_entropy_scaled_cumulative_store,
+                # ylabel='$\\varepsilon=-\\frac{\\mathrm{d} K^{*}}{\\mathrm{d}t^{*}}$',
+                ylabel='Numerical Entropy, $\\eta$',
+                xlabel='Nondimensional Time, $t^{*}$',
+                figure_filename=figure_subdirectory+'numerical_entropy_vs_time'+figure_filename_postfix,
+                title_label=figure_title,
+                markers=False,
+                legend_labels_tex=labels_store_,
+                black_lines=False,
+                xlimits=[0,tmax],
+                # ylimits=[0.0,0.018],
+                log_axes=log_axes_input,
+                which_lines_black=which_lines_black_input_,
+                which_lines_dashed=which_lines_dashed_input_,
+                legend_on=legend_on_input,
+                legend_inside=legend_inside_input,
+                nlegendcols=nlegendcols_input,
+                figure_size=(6,6),
+                transparent_legend=transparent_legend_input,
+                legend_border_on=False,
+                grid_lines_on=False,
+                fig_directory=figure_directory_base,
+                clr_input=clr_input_store_,mrkr_input=mrkr_input_store_,lnstl_input=lnstl_input_store_,
+                legend_fontSize=legend_fontSize_input,
+                legend_location="upper left")
+    # do more popping here if no relaxation but has num entropy
+    # if has_relaxation_parameter: # update this, like if(plot_relaxation_flag)
+    qp.plotfxn(xdata=time_store_,
+                ydata=relaxation_parameter_store,
+                # ylabel='$\\varepsilon=-\\frac{\\mathrm{d} K^{*}}{\\mathrm{d}t^{*}}$',
+                ylabel='Relaxation Parameter, $\\gamma^n$',
+                xlabel='Nondimensional Time, $t^{*}$',
+                figure_filename=figure_subdirectory+'relaxation_parameter_vs_time'+figure_filename_postfix,
+                title_label=figure_title,
+                markers=False,
+                legend_labels_tex=labels_store_,
+                black_lines=False,
+                xlimits=[0,tmax],
+                # ylimits=[0.0,0.018],
+                log_axes=log_axes_input,
+                which_lines_black=which_lines_black_input_,
+                which_lines_dashed=which_lines_dashed_input_,
+                legend_on=legend_on_input,
+                legend_inside=legend_inside_input,
+                nlegendcols=nlegendcols_input,
+                figure_size=(6,6),
+                transparent_legend=transparent_legend_input,
+                legend_border_on=False,
+                grid_lines_on=False,
+                fig_directory=figure_directory_base,
+                clr_input=clr_input_store_,mrkr_input=mrkr_input_store_,lnstl_input=lnstl_input_store_,
+                legend_fontSize=legend_fontSize_input,
+                legend_location="upper left")
